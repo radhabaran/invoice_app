@@ -1,5 +1,4 @@
 # validator.py
-
 import re
 from datetime import datetime
 
@@ -12,26 +11,33 @@ class DataValidator:
 
 
     @staticmethod
-    def validate_customer_data(data):
-        """Validate all customer data"""
+    def validate_workflow_state(workflow_state_dict):
+        """Validate workflow state data"""
         errors = []
         
-        # Required fields
-        required_fields = ['cust_unique_id', 'cust_tax_id', 'cust_email', 
-                          'billed_amount', 'currency']
-        for field in required_fields:
-            if not data.get(field):
-                errors.append(f"{field} is required")
-
-        # Email format
-        if data.get('cust_email') and not DataValidator.validate_email(data['cust_email']):
+        # Customer data validation
+        customer = workflow_state_dict.get('customer', {})
+        if not customer.get('cust_unique_id'):
+            errors.append("Customer ID is required")
+        if not customer.get('cust_tax_id'):
+            errors.append("Tax ID is required")
+        if not customer.get('cust_email'):
+            errors.append("Email is required")
+        elif not DataValidator.validate_email(customer['cust_email']):
             errors.append("Invalid email format")
 
-        # Billed amount
-        try:
-            if float(data.get('billed_amount', 0)) <= 0:
-                errors.append("Billed amount must be positive")
-        except ValueError:
-            errors.append("Invalid billed amount")
+        # Invoice data validation
+        invoice = workflow_state_dict.get('invoice', {})
+        if not invoice.get('billed_amount'):
+            errors.append("Billed amount is required")
+        else:
+            try:
+                if float(invoice['billed_amount']) <= 0:
+                    errors.append("Billed amount must be positive")
+            except ValueError:
+                errors.append("Invalid billed amount")
 
-        return errors
+        if not invoice.get('currency'):
+            errors.append("Currency is required")
+
+        return errors if errors else None

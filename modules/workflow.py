@@ -3,18 +3,18 @@
 from langgraph.graph import StateGraph
 from datetime import datetime, timedelta
 import uuid
+from typing import Dict, Any
 
 class WorkflowManager:
-    def __init__(self, data_manager, invoice_generator, email_handler):
+    def __init__(self, data_manager, invoice_generator, email_handler, workflow_state_class):
         self.data_manager = data_manager
         self.invoice_generator = invoice_generator
         self.email_handler = email_handler
-        self.graph = self.setup_workflow()
+        self.graph = self.setup_workflow(workflow_state_class)
 
-
-    def setup_workflow(self):
+    def setup_workflow(self, workflow_state_class):
         """Setup LangGraph workflow"""
-        workflow = StateGraph()
+        workflow = StateGraph(state_schema=workflow_state_class)
         
         workflow.add_node("validate", self.validate_step)
         workflow.add_node("generate_invoice", self.generate_invoice_step)
@@ -22,53 +22,76 @@ class WorkflowManager:
         
         return workflow
 
-
-    def validate_step(self, state):
+    def validate_step(self, workflow_state):
         """Validation step"""
-        if self.data_manager.check_duplicate(state['cust_unique_id']):
-            return {"valid": False, "error": "Duplicate customer ID"}
-        return {"valid": True}
+        if self.data_manager.check_duplicate(workflow_state.customer['cust_unique_id']):
+            workflow_state.error = "Duplicate customer ID"
+            return workflow_state
 
+        workflow_state.validation_status = {
+            "is_valid": True,
+            "validated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        return workflow_state
 
-    def generate_invoice_step(self, state):
+    def generate_invoice_step(self, workflow_state):
         """Invoice generation step"""
-        state['transaction_id'] = str(uuid.uuid4())[:8]
-        state['transaction_date'] = datetime.now().strftime('%m-%d-%Y')
-        state['payment_due_date'] = (datetime.now() + timedelta(days=30)).strftime('%m-%d-%Y')
-        state['payment_status'] = 'pending'
-        
-        invoice_path = self.invoice_generator.generate_invoice(state)
-        return {"invoice_path": invoice_path}
+        try:
+            invoice_path = self.invoice_generator.generate_invoice(workflow_state.dict())
+            
+            workflow_state.invoice_creation_status = {
+                "is_generated": True,
+                "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "file_path": invoice_path
+            }
+        except Exception as e:
+            workflow_state.error = f"Invoice generation failed: {str(e)}"
+            
+        return workflow_state
 
-
-    def send_notification_step(self, state):
+    def send_notification_step(self, workflow_state):
         """Email notification step"""
-        email_sent = self.email_handler.send_invoice(
-            state['cust_email'],
-            state,
-            state['invoice_path']
-        )
-        return {"email_sent": email_sent}
+        try:
+            email_sent = self.email_handler.send_invoice(
+                workflow_state.customer['cust_email'],
+                workflow_state.dict(),
+                workflow_state.invoice_creation_status['file_path']
+            )
+            
+            workflow_state.email_notification_status = {
+                "is_sent": email_sent,
+                "sent_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "recipient": workflow_state.customer['cust_email']
+            }
+        except Exception as e:
+            workflow_state.error = f"Email notification failed: {str(e)}"
+            
+        return workflow_state
 
-
-    def run_workflow(self, data):
+    def run_workflow(self, workflow_state):
         """Execute complete workflow"""
-        state = data.copy()
-        
-        # Run validation
-        validation_result = self.validate_step(state)
-        if not validation_result['valid']:
-            return validation_result
+        try:
+            # Run validation
+            workflow_state = self.validate_step(workflow_state)
+            if workflow_state.error:
+                return workflow_state
 
-        # Generate invoice
-        invoice_result = self.generate_invoice_step(state)
-        state.update(invoice_result)
+            # Generate invoice
+            workflow_state = self.generate_invoice_step(workflow_state)
+            if workflow_state.error:
+                return workflow_state
 
-        # Send notification
-        notification_result = self.send_notification_step(state)
-        state.update(notification_result)
+            # Send notification
+            workflow_state = self.send_notification_step(workflow_state)
+            if workflow_state.error:
+                return workflow_state
 
-        # Save to database
-        self.data_manager.save_record(state)
+            # Save to database
+            self.data_manager.save_record(workflow_state.dict())
+            
+            workflow_state.completed = True
+            return workflow_state
 
-        return state
+        except Exception as e:
+            workflow_state.error = f"Workflow execution failed: {str(e)}"
+            return workflow_state

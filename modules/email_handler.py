@@ -13,18 +13,17 @@ class EmailHandler:
         self.sender_email = os.getenv('GMAIL_USER')
         self.sender_password = os.getenv('GMAIL_PASSWORD')
 
-
-    def send_invoice(self, recipient_email, invoice_data, invoice_path):
+    def send_invoice(self, recipient_email, workflow_state_dict, invoice_path):
         """Send invoice email"""
         try:
             msg = MIMEMultipart()
             msg['From'] = self.sender_email
             msg['To'] = recipient_email
-            msg['Subject'] = "Payment Due"
+            msg['Subject'] = f"Invoice #{workflow_state_dict['invoice']['transaction_id']} - Payment Due"
 
-            body = f"""Dear {invoice_data['cust_fname']},
+            body = f"""Dear {workflow_state_dict['customer']['cust_fname']},
 
-Your payment of {invoice_data['currency']} {invoice_data['billed_amount']} is due by {invoice_data['payment_due_date']}.
+Your payment of {workflow_state_dict['invoice']['currency']} {workflow_state_dict['invoice']['billed_amount']} is due by {workflow_state_dict['invoice']['payment_due_date']}.
 Please do the payment at the earliest.
 
 Best regards,
@@ -46,6 +45,7 @@ Your Company Name"""
                 server.send_message(msg)
 
             return True
+
         except Exception as e:
             print(f"Email error: {str(e)}")
             return False
