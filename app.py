@@ -154,7 +154,7 @@ class InvoiceApp:
 
     def reset_state(self):
         """Reset the state"""
-        self.state = WorkflowState(
+        new_state = WorkflowState(
             customer={
                 'cust_unique_id': '',
                 'cust_tax_id': '',
@@ -171,6 +171,15 @@ class InvoiceApp:
                 'payment_status': 'pending'
             }
         )
+
+        # Reset both instance state and session state
+        self.state = new_state
+        st.session_state.state = new_state
+
+        # Clear the customer_id input value from session state
+        if 'customer_id' in st.session_state:
+            del st.session_state['customer_id']
+
         st.rerun()
 
 
@@ -185,7 +194,9 @@ class InvoiceApp:
             with col1:
                 customer_id = st.text_input("Customer ID*", 
                     value=self.state.customer['cust_unique_id'],
-                    placeholder="Enter unique ID")
+                    placeholder="Enter unique ID",
+                    key='customer_id'
+                )
 
             # Search button in its own row
             with col2:

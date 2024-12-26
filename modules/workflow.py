@@ -69,6 +69,7 @@ class WorkflowManager:
                 "sent_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 "recipient": workflow_state.customer['cust_email']
             }
+            print("*********\n\nDebugging : email_notification_status : ", workflow_state.email_notification_status)
         except Exception as e:
             workflow_state.error = f"Email notification failed: {str(e)}"
             
@@ -93,8 +94,8 @@ class WorkflowManager:
                 return workflow_state
 
             # Save to database only if it's not a duplicate record
-            if not workflow_state.error:
-                self.data_manager.save_record(workflow_state.dict())
+            # if not workflow_state.error:
+            #     self.data_manager.save_record(workflow_state.dict())
             
             workflow_state.completed = True
             return workflow_state

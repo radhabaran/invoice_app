@@ -11,7 +11,7 @@ class EmailHandler:
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 587
         self.sender_email = os.getenv('GMAIL_USER')
-        self.sender_password = os.getenv('GMAIL_PASSWORD')
+        self.sender_password = os.getenv('GMAIL_APP_PASSWORD')
 
     def send_invoice(self, recipient_email, workflow_state_dict, invoice_path):
         """Send invoice email"""
