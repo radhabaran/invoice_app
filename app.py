@@ -23,30 +23,31 @@ class WorkflowState(BaseModel):
 
 class InvoiceApp:
     def __init__(self):
-        self.workflow_manager = self.init_systems()
+        if not hasattr(st.session_state, 'workflow_manager'):
+            st.session_state.workflow_manager = self.init_systems()
+        
+        if not hasattr(st.session_state, 'state'):
+            st.session_state.state = WorkflowState(
+                customer={
+                    'cust_unique_id': '',
+                    'cust_tax_id': '',
+                    'cust_fname': '',
+                    'cust_lname': '',
+                    'cust_email': ''
+                },
+                invoice={
+                    'transaction_id': '',
+                    'transaction_date': '',
+                    'billed_amount': 0.0,
+                    'currency': 'USD',
+                    'payment_due_date': '',
+                    'payment_status': 'pending'
+                }
+            )
+        
+        self.workflow_manager = st.session_state.workflow_manager
         self.validator = DataValidator()
-        self.state = WorkflowState(
-            customer={
-                'cust_unique_id': '',
-                'cust_tax_id': '',
-                'cust_fname': '',
-                'cust_lname': '',
-                'cust_email': ''
-            },
-            invoice={
-                'transaction_id': '',
-                'transaction_date': '',
-                'billed_amount': 0.0,
-                'currency': 'USD',
-                'payment_due_date': '',
-                'payment_status': 'pending'
-            },
-            validation_status=None,
-            invoice_creation_status=None,
-            email_notification_status=None,
-            error=None,
-            completed=False
-        )
+        self.state = st.session_state.state
 
 
     @staticmethod
@@ -89,10 +90,11 @@ class InvoiceApp:
         """Search customer and update state"""
         try:
             result = self.workflow_manager.data_manager.get_customer(customer_id, WorkflowState)
+            
             if result:
                 self.state.customer.update(result.customer)
                 self.state.invoice.update(result.invoice)
-                print("*****\n\n Debugging point in search_customer: cust_unique_id : ", self.state.customer['cust_unique_id'])
+            
                 return True
             
             st.warning("Customer not found")
@@ -135,11 +137,14 @@ class InvoiceApp:
 
     def handle_generate_invoice(self):
         """Handle invoice generation"""
+        print("\n\nDebug - Customer ID at start of generate:", self.state.customer['cust_unique_id'])
+
         if self.state.customer['cust_unique_id'] == '':
             st.error("Please submit record first")
             return
 
         result = self.workflow_manager.run_workflow(self.state)
+        print("\n\nDebug - Workflow result:", result.dict() if result else "No result")
         if result.error:
             st.error(result.error)
         else:
@@ -252,8 +257,7 @@ class InvoiceApp:
                         use_container_width=True,
                         key="generate_button"):
                     
-                    print("*****\n\n Debugging point in generate & send invoice: cust_unique_id : ", self.state.customer['cust_unique_id'])
-
+                    print("\n\nDebug in Generate & Send Invoice - State before generate invoice:", self.state.dict())
                     self.handle_generate_invoice()
             
             with col3:
@@ -280,10 +284,11 @@ class InvoiceApp:
                         if self.state.email_notification_status:
                             st.write(f"✓ Invoice sent to {self.state.customer['cust_email']}")
     def main(self):
-          self.render_main_page()
+        self.render_main_page()
 
 
 def main():
+    
     app = InvoiceApp()
     app.main()
 

@@ -24,6 +24,11 @@ class WorkflowManager:
 
     def validate_step(self, workflow_state):
         """Validation step"""
+
+        if not workflow_state.customer['cust_unique_id']:
+            workflow_state.error = "Customer ID is required"
+            return workflow_state
+
         if self.data_manager.check_duplicate(workflow_state.customer['cust_unique_id']):
             workflow_state.error = "Duplicate customer ID"
             return workflow_state
@@ -44,6 +49,7 @@ class WorkflowManager:
                 "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 "file_path": invoice_path
             }
+            workflow_state.error = None
         except Exception as e:
             workflow_state.error = f"Invoice generation failed: {str(e)}"
             
@@ -73,7 +79,7 @@ class WorkflowManager:
         try:
             # Run validation
             workflow_state = self.validate_step(workflow_state)
-            if workflow_state.error:
+            if workflow_state.error and workflow_state.error != "Duplicate customer ID":
                 return workflow_state
 
             # Generate invoice
@@ -86,8 +92,9 @@ class WorkflowManager:
             if workflow_state.error:
                 return workflow_state
 
-            # Save to database
-            self.data_manager.save_record(workflow_state.dict())
+            # Save to database only if it's not a duplicate record
+            if not workflow_state.error:
+                self.data_manager.save_record(workflow_state.dict())
             
             workflow_state.completed = True
             return workflow_state
